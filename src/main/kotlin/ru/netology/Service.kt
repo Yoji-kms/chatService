@@ -2,7 +2,6 @@ package ru.netology
 
 import ru.netology.exceptions.ChatNotFoundException
 import ru.netology.exceptions.MessageNotFoundException
-import java.lang.RuntimeException
 
 object Service {
     private val messages = mutableListOf<Message>()
@@ -13,7 +12,7 @@ object Service {
         chats.clear()
     }
 
-    fun getRandomChatId():Long{
+    fun getRandomChatId(): Long {
         return chats.random().id
     }
 
@@ -27,10 +26,11 @@ object Service {
         messages += message
 
         val userIdsList = (toIdsList + fromId) as HashSet<Long>
-        val chat: Chat = if (chats.isNotEmpty()) {
-            chats.find { it.userIdsLst.containsAll(userIdsList) && it.userIdsLst.size == userIdsList.size }
-                ?: createChat(userIdsList)
-        } else createChat(userIdsList)
+        val chat: Chat =
+            chats
+                .ifEmpty { createChat(userIdsList) }
+                .let { chats.find { it.userIdsLst.containsAll(userIdsList) && it.userIdsLst.size == userIdsList.size }
+                ?: createChat(userIdsList) }
 
         updateChatMessageList(chat = chat, message = message)
 
@@ -48,10 +48,7 @@ object Service {
     }
 
     fun editMessage(messageId: Long, newText: String): Message {
-        val updatingMessage = messages.getItemByPredicate(
-            predicate = { it.id == messageId },
-            exception = MessageNotFoundException()
-        )
+        val updatingMessage = messages.find { it.id == messageId } ?: throw MessageNotFoundException()
 
         return messages.replaceItem(
             replacingItem = updatingMessage,
@@ -68,75 +65,56 @@ object Service {
     }
 
     fun readChatById(chatId: Long): Chat {
-        return readChat(
-            chats.getItemByPredicate(
-                predicate = { it.id == chatId },
-                exception = ChatNotFoundException()
-            )
-        )
+        return readChat(chats.find { it.id == chatId } ?: throw ChatNotFoundException())
     }
 
     fun readChatByMessageId(messageId: Long): Chat {
-        return readChat(
-            chats.getItemByPredicate(
-                predicate = { it.messageIdsList.contains(messageId) },
-                exception = ChatNotFoundException()
-            )
-        )
+        return readChat(chats.find { it.messageIdsList.contains(messageId) } ?: throw ChatNotFoundException())
     }
 
     fun readChatByMessageCount(messageCount: Int): List<Chat> {
-        val filteredChats = chats.filter { it.messageCount == messageCount }
-        if (filteredChats.isEmpty()) throw ChatNotFoundException()
-        for (chat in filteredChats) {
-            readChat(chat)
-        }
+        val filteredChats = chats
+            .filter { it.messageCount == messageCount }
+        filteredChats.asSequence()
+            .ifEmpty { throw ChatNotFoundException() }
+            .forEach { readChat(it) }
+
         return filteredChats
     }
 
     fun deleteMessage(messageId: Long): Boolean {
-        messages.getItemByPredicate(
-            predicate = { it.id == messageId },
-            exception = MessageNotFoundException()
-        )
+        messages.find { it.id == messageId } ?: throw MessageNotFoundException()
 
-        val chat = chats.getItemByPredicate(
-            predicate = { it.messageIdsList.contains(messageId) },
-            exception = ChatNotFoundException()
-        )
-        val newMessageIdsList = chat.messageIdsList.filterNot { it == messageId }
+        val chat = chats.find { it.messageIdsList.contains(messageId) } ?: throw ChatNotFoundException()
 
-        if (newMessageIdsList.isNotEmpty()) {
-            chats.replaceItem(replacingItem = chat, newItem = chat.copy(messageIdsList = newMessageIdsList))
-        } else chats.remove(chat)
-        return true
+        chat.messageIdsList
+            .filterNot { it == messageId }
+            .ifEmpty {
+                chats.remove(chat)
+                return true
+            }
+            .let { chats.replaceItem(replacingItem = chat, newItem = chat.copy(messageIdsList = it)) }
+            .let { return true }
     }
 
     fun deleteChat(chatId: Long): Boolean {
-        val chat = chats.getItemByPredicate(
-            predicate = { it.id == chatId },
-            exception = ChatNotFoundException()
-        )
+        val chat = chats.find { it.id == chatId } ?: throw ChatNotFoundException()
 
         messages.removeAll { chat.messageIdsList.contains(it.id) }
         return chats.remove(chat)
     }
 
-    private fun <E> MutableList<E>.getItemByPredicate(predicate: (E) -> Boolean, exception: RuntimeException): E {
-        val result = find(predicate)
-        if (result != null) return result
-        throw exception
-    }
-
     private fun updateChatMessageList(chat: Chat, message: Message): Boolean {
-        if (chats.contains(chat)) if (chats.indexOf(chat) >= chats.lastIndex) {
-            chats.replaceItem(
-                replacingItem = chat,
-                newItem = chat.copy(messageIdsList = chat.messageIdsList + message.id, isRead = false)
-            )
-            return true
-        }
-        chats += chat.copy(messageIdsList = chat.messageIdsList + message.id)
+
+        chats
+            .also { if (!it.contains(chat) || it.indexOf(chat) > it.lastIndex) it += chat }
+            .let {
+                it.set(
+                    index = it.indexOf(chat),
+                    element = chat.copy(messageIdsList = chat.messageIdsList + message.id, isRead = false)
+                )
+            }
+
         return true
     }
 
