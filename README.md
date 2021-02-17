@@ -28,6 +28,6 @@
 
 ## Урок 10 (Sequences). Задача 1. ChatService Optimization
 
-### [Продолэжение задания](https://github.com/netology-code/kt-homeworks/tree/master/10_sequences):
+### [Продолжение задания](https://github.com/netology-code/kt-homeworks/tree/master/10_sequences):
 
 Перевести проект на Sequence
